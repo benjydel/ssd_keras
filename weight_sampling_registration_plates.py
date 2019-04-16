@@ -11,7 +11,7 @@ from keras.models import load_model
 
 # TODO: Set the path for the source weights file you want to load.
 
-weights_source_path = '../repos/ssd_keras/VGG_VOC0712_SSD_300x300_iter_120000.h5'
+weights_source_path = '../ssd_keras_files/VGG_VOC0712_SSD_300x300_iter_120000.h5'
 
 # TODO: Set the path and name for the destination weights file
 #       that you want to create.
