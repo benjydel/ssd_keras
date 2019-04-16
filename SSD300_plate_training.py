@@ -63,7 +63,7 @@ model = ssd_300(image_size=(img_height, img_width, img_channels),
                 swap_channels=swap_channels)
 
 # 2: Load some weights into the model.
-weights_path = './VGG_VOC0712_SSD_300x300_iter_120000_subsampled_plates_classes.h5'
+weights_path = '../ssd_keras_files/VGG_VOC0712_SSD_300x300_iter_120000_subsampled_plates_classes.h5'
 #weights_path = '../../repos/ssd_keras/VGG_VOC0712_SSD_300x300_iter_120000.h5'
 
 model.load_weights(weights_path, by_name=True)
@@ -84,8 +84,8 @@ classes = ['background',
 
 # 1: Instantiate two `DataGenerator` objects: One for training.
 # Optional: If you have enough memory, consider loading the images into memory for the reasons explained above.
-path_loaded_train_dataset = "./loaded_dataset_train.h5"
-path_loaded_validation_dataset = "./loaded_dataset_validation.h5"
+path_loaded_train_dataset = "../ssd_keras_files/loaded_dataset_train.h5"
+path_loaded_validation_dataset = "../ssd_keras_files/loaded_dataset_validation.h5"
 train_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=path_loaded_train_dataset)
 val_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=path_loaded_validation_dataset)
 """
@@ -210,7 +210,7 @@ def lr_schedule(epoch):
 # Define model callbacks.
 
 # TODO: Set the filepath under which you want to save the model.
-model_checkpoint = ModelCheckpoint(filepath='ssd300_OID_plates_epoch-{epoch:02d}_loss-{loss:.4f}_val_loss-{val_loss:.4f}.h5',
+model_checkpoint = ModelCheckpoint(filepath='../ssd_keras_files/ssd300_OID_plates_epoch-{epoch:02d}_loss-{loss:.4f}_val_loss-{val_loss:.4f}.h5',
                                    monitor='val_loss',
                                    verbose=1,
                                    save_best_only=True,
@@ -219,7 +219,7 @@ model_checkpoint = ModelCheckpoint(filepath='ssd300_OID_plates_epoch-{epoch:02d}
                                    period=1)
 #model_checkpoint.best = 
 
-csv_logger = CSVLogger(filename='ssd300_OID_plates_training_log.csv',
+csv_logger = CSVLogger(filename='../ssd_keras_files/ssd300_OID_plates_training_log.csv',
                        separator=',',
                        append=True)
 
@@ -315,7 +315,7 @@ for box in batch_original_labels[i]:
     xmax = box[3]
     ymax = box[4]
     label = '{}'.format(classes[int(box[0])])
-    current_axis.add_patch(plt.Rectangle((xmin, ymin), xmax-xmin, ymax-ymin, color='green', fill=False, linewidth=2))  
+    current_axis.add_patch(plt.Rectangle((xmin, ymin), xmax-xmin, ymax-ymin, color='green', fill=False, linewidth=2))
     current_axis.text(xmin, ymin, label, size='x-large', color='white', bbox={'facecolor':'green', 'alpha':1.0})
 
 for box in y_pred_decoded_inv[i]:

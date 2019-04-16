@@ -83,7 +83,7 @@ for box in batch_labels[i]:
     xmax = box[3]
     ymax = box[4]
     label = '{}'.format(classes[int(class_id)])
-    current_axis.add_patch(plt.Rectangle((xmin, ymin), xmax-xmin, ymax-ymin, color='green', fill=False, linewidth=2))  
+    current_axis.add_patch(plt.Rectangle((xmin, ymin), xmax-xmin, ymax-ymin, color='green', fill=False, linewidth=2))
     #current_axis.text(box[1], box[3], label, size='x-large', color='white', bbox={'facecolor':'green', 'alpha':1.0})
 
 plt.show()
