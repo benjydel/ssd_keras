@@ -88,11 +88,12 @@ classes = ['background',
 
 path_loaded_train_dataset = "../ssd_keras_files/loaded_dataset_train.h5"
 path_loaded_validation_dataset = "../ssd_keras_files/loaded_dataset_validation.h5"
+"""
 train_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=path_loaded_train_dataset)
 val_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=path_loaded_validation_dataset)
 """
-train_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=None)
-val_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=None)
+train_dataset = DataGenerator(load_images_into_memory=True, hdf5_dataset_path=None)
+val_dataset = DataGenerator(load_images_into_memory=True, hdf5_dataset_path=None)
 
 # 2: Parse the image and label lists for the training and validation datasets. This can take a while.
 plate_images_dir = '../../Datasets/OpenImages_face_plate/train/Vehicle registration plate/'
@@ -121,6 +122,7 @@ val_dataset.parse_xml(images_dirs=[val_plate_images_dir],
                       exclude_difficult=True,
                       ret=False)
 
+"""
 # Optional: Convert the dataset into an HDF5 dataset. This will require more disk space, but will
 # speed up the training. Doing this is not relevant in case you activated the `load_images_into_memory`
 # option in the constructor, because in that cas the images are in memory already anyway. If you don't
@@ -136,7 +138,7 @@ val_dataset.create_hdf5_dataset(file_path=path_loaded_validation_dataset,
                                 verbose=True)
 """
 # 3: Set the batch size.
-batch_size = 16 # Change the batch size if you like, or if you run into GPU memory issues.
+batch_size = 32 # Change the batch size if you like, or if you run into GPU memory issues.
 
 # 4: Set the image transformations for pre-processing and data augmentation options.
 # For the training generator:
@@ -216,8 +218,10 @@ print("Number of generated images:\t{:>6}".format(len(processed_images)))
 
 def lr_schedule(epoch):
     if epoch < 80:
-        return 0.001
+        return 0.01
     elif epoch < 100:
+        return 0.001
+    elif epoch < 250:
         return 0.0001
     else:
         return 0.00001
@@ -251,8 +255,8 @@ callbacks = [model_checkpoint,
 # If you're resuming a previous training, set `initial_epoch` and `final_epoch` accordingly.
 initial_epoch   = 0
 #final_epoch     = 120
-final_epoch     = 120
-steps_per_epoch = 200
+final_epoch     = 500
+steps_per_epoch = 2000
 
 history = model.fit_generator(generator=train_generator,
                               steps_per_epoch=steps_per_epoch,
@@ -261,3 +265,5 @@ history = model.fit_generator(generator=train_generator,
                               validation_data=val_generator,
                               validation_steps=ceil(val_dataset_size/batch_size),
                               initial_epoch=initial_epoch)
+
+model.save_weights('../ssd_keras_files/my_model_weights.h5')
