@@ -63,7 +63,7 @@ model = ssd_300(image_size=(img_height, img_width, img_channels),
                 swap_channels=swap_channels)
 
 # 2: Load some weights into the model.
-weights_path = '../ssd_keras_files/ssd300_OID_plates_epoch-111_loss-4.7148_val_loss-3.8296.h5'
+weights_path = '../ssd_keras_files/ssd300_OID_plates_epoch-81_loss-3.1779_val_loss-2.5637.h5'
 #weights_path = '../../repos/ssd_keras/VGG_VOC0712_SSD_300x300_iter_120000.h5'
 
 model.load_weights(weights_path, by_name=True)
@@ -142,7 +142,7 @@ y_pred = model.predict(batch_images)
 # 4: Decode the raw predictions in `y_pred`.
 
 y_pred_decoded = decode_detections(y_pred,
-                                   confidence_thresh=0.2,
+                                   confidence_thresh=0.5,
                                    iou_threshold=0.4,
                                    top_k=200,
                                    normalize_coords=normalize_coords,

@@ -10,7 +10,8 @@ from keras_layers.keras_layer_L2Normalization import L2Normalization
 from data_generator.object_detection_2d_data_generator import DataGenerator
 from data_generator.object_detection_2d_photometric_ops import ConvertTo3Channels
 from data_generator.object_detection_2d_patch_sampling_ops import RandomMaxCropFixedAR
-from data_generator.object_detection_2d_geometric_ops import Resize
+from data_generator.object_detection_2d_geometric_ops import *
+from data_generator.data_augmentation_chain_original_ssd import SSDDataAugmentation
 
 img_height = 300 # Height of the input images
 img_width = 300 # Width of the input images
@@ -46,9 +47,21 @@ convert_to_3_channels = ConvertTo3Channels()
 random_max_crop = RandomMaxCropFixedAR(patch_aspect_ratio=img_width/img_height)
 resize = Resize(height=img_height, width=img_width)
 
+ssd_data_augmentation = SSDDataAugmentation(img_height=img_height,
+                                            img_width=img_width)
+random_flip           = RandomFlip(dim='vertical', prob=0.5)
+random_translate      = RandomTranslate()
+random_scale          = RandomScale()
+random_rotate         = RandomRotate()
+
+
+data_augmentation = [
+                    ssd_data_augmentation
+                    ]
+
 generator = dataset.generate(batch_size=1,
                              shuffle=False, #image random in the dataset
-                             transformations=[],
+                             transformations=data_augmentation,
                              returns={'processed_images',
                                       'processed_labels',
                                       'filenames'},

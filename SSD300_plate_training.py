@@ -4,7 +4,7 @@ from keras import backend as K
 from keras.models import load_model
 from math import ceil
 import numpy as np
-from matplotlib import pyplot as plt
+
 
 from models.keras_ssd300 import ssd_300
 from keras_loss_function.keras_ssd_loss import SSDLoss
@@ -17,7 +17,8 @@ from ssd_encoder_decoder.ssd_input_encoder import SSDInputEncoder
 from ssd_encoder_decoder.ssd_output_decoder import decode_detections, decode_detections_fast
 
 from data_generator.object_detection_2d_data_generator import DataGenerator
-from data_generator.object_detection_2d_geometric_ops import Resize
+from data_generator.object_detection_2d_geometric_ops import *
+#from data_generator.object_detection_2d_geometric_ops import Resize
 from data_generator.object_detection_2d_photometric_ops import ConvertTo3Channels
 from data_generator.data_augmentation_chain_original_ssd import SSDDataAugmentation
 from data_generator.object_detection_2d_misc_utils import apply_inverse_transforms
@@ -84,6 +85,7 @@ classes = ['background',
 
 # 1: Instantiate two `DataGenerator` objects: One for training.
 # Optional: If you have enough memory, consider loading the images into memory for the reasons explained above.
+
 path_loaded_train_dataset = "../ssd_keras_files/loaded_dataset_train.h5"
 path_loaded_validation_dataset = "../ssd_keras_files/loaded_dataset_validation.h5"
 train_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=path_loaded_train_dataset)
@@ -123,23 +125,34 @@ val_dataset.parse_xml(images_dirs=[val_plate_images_dir],
 # speed up the training. Doing this is not relevant in case you activated the `load_images_into_memory`
 # option in the constructor, because in that cas the images are in memory already anyway. If you don't
 # want to create HDF5 datasets, comment out the subsequent two function calls.
-train_dataset.create_hdf5_dataset(file_path='loaded_dataset_train.h5',
+
+train_dataset.create_hdf5_dataset(file_path=path_loaded_train_dataset,
                                   resize=False,
                                   variable_image_size=True,
                                   verbose=True)
-val_dataset.create_hdf5_dataset(file_path='loaded_dataset_validation.h5',
+val_dataset.create_hdf5_dataset(file_path=path_loaded_validation_dataset,
                                 resize=False,
                                 variable_image_size=True,
                                 verbose=True)
 """
 # 3: Set the batch size.
-batch_size = 32 # Change the batch size if you like, or if you run into GPU memory issues.
+batch_size = 16 # Change the batch size if you like, or if you run into GPU memory issues.
 
 # 4: Set the image transformations for pre-processing and data augmentation options.
 # For the training generator:
 ssd_data_augmentation = SSDDataAugmentation(img_height=img_height,
                                             img_width=img_width,
                                             background=mean_color)
+
+random_flip           = RandomFlip(dim='vertical', prob=0.5)
+random_translate      = RandomTranslate()
+random_scale          = RandomScale()
+random_rotate         = RandomRotate()
+
+
+data_augmentation = [
+                    ssd_data_augmentation
+                    ]
 
 # For the validation generator:
 convert_to_3_channels = ConvertTo3Channels()
@@ -174,7 +187,7 @@ ssd_input_encoder = SSDInputEncoder(img_height=img_height,
 
 train_generator = train_dataset.generate(batch_size=batch_size,
                                          shuffle=True,
-                                         transformations=[ssd_data_augmentation],
+                                         transformations=data_augmentation,
                                          label_encoder=ssd_input_encoder,
                                          returns={'processed_images',
                                                   'encoded_labels'},
@@ -194,18 +207,20 @@ val_dataset_size   = val_dataset.get_dataset_size()
 print("Number of images in the training dataset:\t{:>6}".format(train_dataset_size))
 print("Number of images in the validation dataset:\t{:>6}".format(val_dataset_size))
 
+processed_images, encoded_labels = next(train_generator)
+print("Number of generated images:\t{:>6}".format(len(processed_images)))   
+
 
 
 # Define a learning rate schedule.
 
 def lr_schedule(epoch):
-    """if epoch < 80:
+    if epoch < 80:
         return 0.001
     elif epoch < 100:
         return 0.0001
     else:
-        return 0.00001"""
-    return 0.00001
+        return 0.00001
 
 # Define model callbacks.
 

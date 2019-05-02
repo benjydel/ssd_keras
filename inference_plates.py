@@ -29,11 +29,12 @@ input_images = [] # Store resized versions of the images here.
 
 # We'll only load one image in this example.
 #img_path = '/home/bende/Datasets/OpenImages_face_plate/validation/Vehicle registration plate/0c756c9366a8cb10.jpg'
-img_path = '../ssd_keras_files/voiture1.jpg'
+img_path = '../ssd_keras_files/voiture3.jpg'
+confidence_threshold = 0.1
 
 # TODO: Set the path to the `.h5` file of the model to be loaded.
 #model_path = '../ssd_keras_files/ssd300_OID_plates_epoch-111_loss-4.7148_val_loss-3.8296.h5'
-model_path = '../ssd_keras_files/ssd300_OID_plates_epoch-111_loss-4.7148_val_loss-3.8296.h5'
+model_path = '../ssd_keras_files/ssd300_OID_plates_epoch-81_loss-3.1779_val_loss-2.5637.h5'
 
 # 1: Build the Keras model
 
@@ -84,7 +85,7 @@ input_images = np.array(input_images)
 
 y_pred = model.predict(input_images)
 
-confidence_threshold = 0.1
+
 
 y_pred_thresh = [y_pred[k][y_pred[k,:,1] > confidence_threshold] for k in range(y_pred.shape[0])]
 
