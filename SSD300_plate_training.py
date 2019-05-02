@@ -218,10 +218,8 @@ print("Number of generated images:\t{:>6}".format(len(processed_images)))
 
 def lr_schedule(epoch):
     if epoch < 80:
-        return 0.01
-    elif epoch < 100:
         return 0.001
-    elif epoch < 250:
+    elif epoch < 100:
         return 0.0001
     else:
         return 0.00001
@@ -245,11 +243,14 @@ csv_logger = CSVLogger(filename='../ssd_keras_files/ssd300_OID_plates_training_l
 learning_rate_scheduler = LearningRateScheduler(schedule=lr_schedule,
                                                 verbose=1)
 
+learning_rate_ROP = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=100)
+
 terminate_on_nan = TerminateOnNaN()
 
 callbacks = [model_checkpoint,
              csv_logger,
-             learning_rate_scheduler,
+#             learning_rate_scheduler,
+             learning_rate_ROP,
              terminate_on_nan]
 
 # If you're resuming a previous training, set `initial_epoch` and `final_epoch` accordingly.
