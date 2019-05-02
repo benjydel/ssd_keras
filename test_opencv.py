@@ -32,13 +32,13 @@ input_images = [] # Store resized versions of the images here.
 
 # We'll only load one image in this example.
 #img_path = '/home/bende/Datasets/OpenImages_face_plate/validation/Vehicle registration plate/0c756c9366a8cb10.jpg'
-img_path = '../ssd_keras_files/voiturefeu.jpg'
+#img_path = '../ssd_keras_files/voiturefeu.jpg'
 video_path = '../ssd_keras_files/Test AR DOD RC500S A6.mp4'
-confidence_threshold = 0.1
+confidence_threshold = 0.5
 
 # TODO: Set the path to the `.h5` file of the model to be loaded.
-#model_path = '../ssd_keras_files/ssd300_OID_plates_epoch-111_loss-4.7148_val_loss-3.8296.h5'
-model_path = '../ssd_keras_files/ssd300_OID_plates_epoch-97_loss-2.9400_val_loss-2.4888.h5'
+model_path = '../ssd_keras_files/ssd300_OID_plates_epoch-111_loss-4.7148_val_loss-3.8296.h5'
+#model_path = '../ssd_keras_files/ssd300_OID_plates_epoch-97_loss-2.9400_val_loss-2.4888.h5'
 
 def predict_on_image(read_image, model):
     start = time.time()
@@ -54,10 +54,11 @@ def predict_on_image(read_image, model):
 
     y_pred_thresh = [y_pred[k][y_pred[k,:,1] > confidence_threshold] for k in range(y_pred.shape[0])]
 
-    np.set_printoptions(precision=2, suppress=True, linewidth=90)
-    print("Predicted boxes:\n")
-    print('   class   conf xmin   ymin   xmax   ymax')
-    print(y_pred_thresh[0])
+    if y_pred_thresh[0]:
+        np.set_printoptions(precision=2, suppress=True, linewidth=90)
+        print("Predicted boxes:\n")
+        print('   class   conf xmin   ymin   xmax   ymax')
+        print(y_pred_thresh[0])
 
     return y_pred_thresh
 
