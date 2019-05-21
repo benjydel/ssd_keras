@@ -27,17 +27,11 @@ img_width = 300
 orig_images = [] # Store the images here.
 input_images = [] # Store resized versions of the images here.
 
-# We'll only load one image in this example.
-#img_path = '/home/bende/Datasets/OpenImages_face_plate/validation/Vehicle registration plate/0c756c9366a8cb10.jpg'
-img_path = '../ssd_keras_files/voiture3.jpg'
-confidence_threshold = 0.1
+weight_path_input = '../ssd_keras_files/ssd300_OID_plates_epoch-81_loss-3.1779_val_loss-2.5637.h5'
 
-# TODO: Set the path to the `.h5` file of the model to be loaded.
-#model_path = '../ssd_keras_files/ssd300_OID_plates_epoch-111_loss-4.7148_val_loss-3.8296.h5'
-model_path = '../ssd_keras_files/ssd300_OID_plates_epoch-81_loss-3.1779_val_loss-2.5637.h5'
+model_path_output = '../ssd_keras_files/ssd300_OID_plates_MODEL.h5'
 
 # 1: Build the Keras model
-
 K.clear_session() # Clear previous models from memory.
 
 model = ssd_300(image_size=(img_height, img_width, 3),
@@ -66,9 +60,7 @@ model = ssd_300(image_size=(img_height, img_width, 3),
 
 # 2: Load the trained weights into the model.
 
-model.load_weights(model_path, by_name=True)
-
-# 3: Compile the model so that Keras won't complain the next time you load it.
+model.load_weights(weight_path_input, by_name=True)
 
 adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
 
@@ -76,45 +68,4 @@ ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
 
 model.compile(optimizer=adam, loss=ssd_loss.compute_loss)
 
-
-orig_images.append(imread(img_path))
-img = image.load_img(img_path, target_size=(img_height, img_width))
-img = image.img_to_array(img) 
-input_images.append(img)
-input_images = np.array(input_images)
-
-y_pred = model.predict(input_images)
-
-
-
-y_pred_thresh = [y_pred[k][y_pred[k,:,1] > confidence_threshold] for k in range(y_pred.shape[0])]
-
-np.set_printoptions(precision=2, suppress=True, linewidth=90)
-print("Predicted boxes:\n")
-print('   class   conf xmin   ymin   xmax   ymax')
-print(y_pred_thresh[0])
-
-# Display the image and draw the predicted boxes onto it.
-
-# Set the colors for the bounding boxes
-colors = plt.cm.hsv(np.linspace(0, 1, 21)).tolist()
-classes = ['background',
-           'Vehicle plate registration']
-
-plt.figure(figsize=(20,12))
-plt.imshow(orig_images[0])
-
-current_axis = plt.gca()
-
-for box in y_pred_thresh[0]:
-    # Transform the predicted bounding boxes for the 300x300 image to the original image dimensions.
-    xmin = box[2] * orig_images[0].shape[1] / img_width
-    ymin = box[3] * orig_images[0].shape[0] / img_height
-    xmax = box[4] * orig_images[0].shape[1] / img_width
-    ymax = box[5] * orig_images[0].shape[0] / img_height
-    color = colors[int(box[0])]
-    label = '{}: {:.2f}'.format(classes[int(box[0])], box[1])
-    current_axis.add_patch(plt.Rectangle((xmin, ymin), xmax-xmin, ymax-ymin, color=color, fill=False, linewidth=2))  
-    current_axis.text(xmin, ymin, label, size='x-large', color='white', bbox={'facecolor':color, 'alpha':1.0})
-
-plt.show()
+model.save(filepath=model_path_output)

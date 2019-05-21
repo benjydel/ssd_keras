@@ -23,12 +23,58 @@ from data_generator.object_detection_2d_photometric_ops import ConvertTo3Channel
 from data_generator.data_augmentation_chain_original_ssd import SSDDataAugmentation
 from data_generator.object_detection_2d_misc_utils import apply_inverse_transforms
 
+
+########################################## TO CONFIGURE ##############################################
+weights_path = '../ssd_keras_files/VGG_ILSVRC_16_layers_fc_reduced.h5'
+
+classes = ['Vehicle registration plate']
+
+# 2: Parse the image and label lists for the training and validation datasets. This can take a while.
+train_images_dir = ['../../Datasets/OpenImages_face_plate/train/Vehicle registration plate/']
+train_annotations_dir = ['../../Datasets/OpenImages_face_plate/train/Vehicle registration plate/To_PASCAL_XML/']
+train_filename = ['../../Datasets/OpenImages_face_plate/train/Vehicle registration plate/ImageSets/filenames_xml.txt']
+
+val_images_dir = ['../../Datasets/OpenImages_face_plate/validation/Vehicle registration plate/']
+val_annotations_dir = ['../../Datasets/OpenImages_face_plate/validation/Vehicle registration plate/To_PASCAL_XML/']
+val_filename = ['../../Datasets/OpenImages_face_plate/validation/Vehicle registration plate/ImageSets/filenames_xml.txt']
+
+batch_size = 8 # Change the batch size if you like, or if you run into GPU memory issues.
+
+path_to_checkpoint = "../ssd_keras_files/"
+prefix_checkpoint = "ssd300_OID_plates_2105"
+path_to_cvslog = '../ssd_keras_files/'+prefix_checkpoint+'_training_log.csv'
+path_to_final_model = '../ssd_keras_files/'+prefix_checkpoint+'_weights.h5'
+
+# If you're resuming a previous training, set `initial_epoch` and `final_epoch` accordingly.
+initial_epoch   = 0
+final_epoch     = 120
+steps_per_epoch = 1000
+
+# Define a learning rate callback .
+
+def lr_schedule(epoch):
+    if epoch < 80:
+        return 0.001
+    elif epoch < 100:
+        return 0.0001
+    else:
+        return 0.00001
+learning_rate_callback = LearningRateScheduler(schedule=lr_schedule,
+                                                verbose=1)
+
+#learning_rate_callback = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=100)
+
+######################################################################################################
+
+### SSD300 PARAMETERS
 img_height = 300 # Height of the model input images
 img_width = 300 # Width of the model input images
 img_channels = 3 # Number of color channels of the model input images
+
 mean_color = [123, 117, 104] # The per-channel mean of the images in the dataset. Do not change this value if you're using any of the pre-trained weights.
 swap_channels = [2, 1, 0] # The color channel order in the original SSD is BGR, so we'll have the model reverse the color channel order of the input images.
-n_classes = 1 # Number of positive classes, e.g. 20 for Pascal VOC, 80 for MS COCO
+n_classes = len(classes) # Number of positive classes, e.g. 20 for Pascal VOC, 80 for MS COCO
+classes_n_background = ['background'] + classes
 scales_pascal = [0.1, 0.2, 0.37, 0.54, 0.71, 0.88, 1.05] # The anchor box scaling factors used in the original SSD300 for the Pascal VOC datasets
 scales_coco = [0.07, 0.15, 0.33, 0.51, 0.69, 0.87, 1.05] # The anchor box scaling factors used in the original SSD300 for the MS COCO datasets
 scales = scales_pascal
@@ -64,9 +110,6 @@ model = ssd_300(image_size=(img_height, img_width, img_channels),
                 swap_channels=swap_channels)
 
 # 2: Load some weights into the model.
-weights_path = '../ssd_keras_files/VGG_VOC0712_SSD_300x300_iter_120000_subsampled_plates_classes.h5'
-#weights_path = '../../repos/ssd_keras/VGG_VOC0712_SSD_300x300_iter_120000.h5'
-
 model.load_weights(weights_path, by_name=True)
 
 # 3: Instantiate an optimizer and the SSD loss function and compile the model.
@@ -80,43 +123,34 @@ ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
 
 model.compile(optimizer=sgd, loss=ssd_loss.compute_loss)
 
-classes = ['background',
-           'Vehicle registration plate']
 
 # 1: Instantiate two `DataGenerator` objects: One for training.
 # Optional: If you have enough memory, consider loading the images into memory for the reasons explained above.
 
 path_loaded_train_dataset = "../ssd_keras_files/loaded_dataset_train.h5"
 path_loaded_validation_dataset = "../ssd_keras_files/loaded_dataset_validation.h5"
-"""
 train_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=path_loaded_train_dataset)
 val_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=path_loaded_validation_dataset)
 """
 train_dataset = DataGenerator(load_images_into_memory=True, hdf5_dataset_path=None)
 val_dataset = DataGenerator(load_images_into_memory=True, hdf5_dataset_path=None)
-
-# 2: Parse the image and label lists for the training and validation datasets. This can take a while.
-plate_images_dir = '../../Datasets/OpenImages_face_plate/train/Vehicle registration plate/'
-plate_annotations_dir = '../../Datasets/OpenImages_face_plate/train/Vehicle registration plate/To_PASCAL_XML/'
-plate_filename = '../../Datasets/OpenImages_face_plate/train/Vehicle registration plate/ImageSets/filenames_xml.txt'
-
-val_plate_images_dir = '../../Datasets/OpenImages_face_plate/validation/Vehicle registration plate/'
-val_plate_annotations_dir = '../../Datasets/OpenImages_face_plate/validation/Vehicle registration plate/To_PASCAL_XML/'
-val_plate_filename = '../../Datasets/OpenImages_face_plate/validation/Vehicle registration plate/ImageSets/filenames_xml.txt'
-
-
-train_dataset.parse_xml(images_dirs=[plate_images_dir],
-                        image_set_filenames=[plate_filename],
-                        annotations_dirs=[plate_annotations_dir],
-                        classes=classes,
+"""
+"""
+train_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=None)
+val_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=None)
+"""
+train_dataset.parse_xml(images_dirs=train_images_dir,
+                        image_set_filenames=train_filename,
+                        annotations_dirs=train_annotations_dir,
+                        classes=classes_n_background,
                         include_classes='all',
                         exclude_truncated=False,
                         exclude_difficult=False,
                         ret=False)
-val_dataset.parse_xml(images_dirs=[val_plate_images_dir],
-                      image_set_filenames=[val_plate_filename],
-                      annotations_dirs=[val_plate_annotations_dir],
-                      classes=classes,
+val_dataset.parse_xml(images_dirs=val_images_dir,
+                      image_set_filenames=val_filename,
+                      annotations_dirs=val_annotations_dir,
+                      classes=classes_n_background,
                       include_classes='all',
                       exclude_truncated=False,
                       exclude_difficult=True,
@@ -137,28 +171,20 @@ val_dataset.create_hdf5_dataset(file_path=path_loaded_validation_dataset,
                                 variable_image_size=True,
                                 verbose=True)
 """
-# 3: Set the batch size.
-batch_size = 32 # Change the batch size if you like, or if you run into GPU memory issues.
-
 # 4: Set the image transformations for pre-processing and data augmentation options.
 # For the training generator:
 ssd_data_augmentation = SSDDataAugmentation(img_height=img_height,
                                             img_width=img_width,
                                             background=mean_color)
 
+"""
 random_flip           = RandomFlip(dim='vertical', prob=0.5)
 random_translate      = RandomTranslate()
 random_scale          = RandomScale()
 random_rotate         = RandomRotate()
+"""
 
-
-data_augmentation = [
-                    ssd_data_augmentation
-                    ]
-
-# For the validation generator:
-convert_to_3_channels = ConvertTo3Channels()
-resize = Resize(height=img_height, width=img_width)
+data_augmentation = [ ssd_data_augmentation ]
 
 # 5: Instantiate an encoder that can encode ground truth labels into the format needed by the SSD loss function.
 # The encoder constructor needs the spatial dimensions of the model's predictor layers to create the anchor boxes.
@@ -186,7 +212,6 @@ ssd_input_encoder = SSDInputEncoder(img_height=img_height,
                                     normalize_coords=normalize_coords)
 
 # 6: Create the generator handles that will be passed to Keras' `fit_generator()` function.
-
 train_generator = train_dataset.generate(batch_size=batch_size,
                                          shuffle=True,
                                          transformations=data_augmentation,
@@ -194,6 +219,11 @@ train_generator = train_dataset.generate(batch_size=batch_size,
                                          returns={'processed_images',
                                                   'encoded_labels'},
                                          keep_images_without_gt=False)
+
+# For the validation generator:
+convert_to_3_channels = ConvertTo3Channels()
+resize = Resize(height=img_height, width=img_width)
+
 val_generator = val_dataset.generate(batch_size=batch_size,
                                      shuffle=False,
                                      transformations=[convert_to_3_channels,
@@ -214,20 +244,8 @@ print("Number of generated images:\t{:>6}".format(len(processed_images)))
 
 
 
-# Define a learning rate schedule.
-
-def lr_schedule(epoch):
-    if epoch < 80:
-        return 0.001
-    elif epoch < 100:
-        return 0.0001
-    else:
-        return 0.00001
-
-# Define model callbacks.
-
-# TODO: Set the filepath under which you want to save the model.
-model_checkpoint = ModelCheckpoint(filepath='../ssd_keras_files/ssd300_OID_plates_epoch-{epoch:02d}_loss-{loss:.4f}_val_loss-{val_loss:.4f}.h5',
+#Needed callbacks
+model_checkpoint = ModelCheckpoint(filepath=path_to_checkpoint+'/'+prefix_checkpoint+'_epoch-{epoch:02d}_loss-{loss:.4f}_val_loss-{val_loss:.4f}.h5',
                                    monitor='val_loss',
                                    verbose=1,
                                    save_best_only=True,
@@ -236,28 +254,17 @@ model_checkpoint = ModelCheckpoint(filepath='../ssd_keras_files/ssd300_OID_plate
                                    period=1)
 #model_checkpoint.best = 
 
-csv_logger = CSVLogger(filename='../ssd_keras_files/ssd300_OID_plates_training_log.csv',
+
+terminate_on_nan = TerminateOnNaN()
+csv_logger = CSVLogger(filename=path_to_cvslog,
                        separator=',',
                        append=True)
 
-learning_rate_scheduler = LearningRateScheduler(schedule=lr_schedule,
-                                                verbose=1)
-
-learning_rate_ROP = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=100)
-
-terminate_on_nan = TerminateOnNaN()
-
 callbacks = [model_checkpoint,
              csv_logger,
-#             learning_rate_scheduler,
-             learning_rate_ROP,
+             learning_rate_callback,
              terminate_on_nan]
 
-# If you're resuming a previous training, set `initial_epoch` and `final_epoch` accordingly.
-initial_epoch   = 0
-#final_epoch     = 120
-final_epoch     = 500
-steps_per_epoch = 2000
 
 history = model.fit_generator(generator=train_generator,
                               steps_per_epoch=steps_per_epoch,
@@ -267,4 +274,5 @@ history = model.fit_generator(generator=train_generator,
                               validation_steps=ceil(val_dataset_size/batch_size),
                               initial_epoch=initial_epoch)
 
-model.save_weights('../ssd_keras_files/my_model_weights.h5')
+#Save the final model to 
+model.save_weights(path_to_final_model)

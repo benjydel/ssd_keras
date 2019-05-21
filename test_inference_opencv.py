@@ -4,8 +4,9 @@ from keras.preprocessing import image
 from keras.optimizers import Adam
 #from imageio import imread
 import numpy as np
+import random
 import cv2
-from matplotlib import pyplot as plt
+#from matplotlib import pyplot as plt
 
 from models.keras_ssd300 import ssd_300
 from keras_loss_function.keras_ssd_loss import SSDLoss
@@ -21,11 +22,17 @@ from data_generator.object_detection_2d_photometric_ops import ConvertTo3Channel
 from data_generator.object_detection_2d_geometric_ops import Resize
 from data_generator.object_detection_2d_misc_utils import apply_inverse_transforms
 
+from threading import Thread
+from datetime import datetime
 import time
 
 # Set the image size.
 img_height = 300
 img_width = 300
+
+classes = ['background',
+            'Vehicle plate registration']
+colors = ( (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)) for i in range(len(classes)) )
 
 orig_images = [] # Store the images here.
 input_images = [] # Store resized versions of the images here.
@@ -33,12 +40,98 @@ input_images = [] # Store resized versions of the images here.
 # We'll only load one image in this example.
 #img_path = '/home/bende/Datasets/OpenImages_face_plate/validation/Vehicle registration plate/0c756c9366a8cb10.jpg'
 #img_path = '../ssd_keras_files/voiturefeu.jpg'
-video_path = '../ssd_keras_files/Test AR DOD RC500S A6.mp4'
+video_path = '../ssd_keras_files/UK_Dash_Cam_IDIOT_DRIVERS.mp4'
 confidence_threshold = 0.5
 
 # TODO: Set the path to the `.h5` file of the model to be loaded.
-model_path = '../ssd_keras_files/ssd300_OID_plates_epoch-111_loss-4.7148_val_loss-3.8296.h5'
 #model_path = '../ssd_keras_files/ssd300_OID_plates_epoch-97_loss-2.9400_val_loss-2.4888.h5'
+model_path = '../ssd_keras_files/ssd300_OID_plates_MODEL.h5'
+
+
+class CountsPerSec:
+    """
+    Class that tracks the number of occurrences ("counts") of an
+    arbitrary event and returns the frequency in occurrences
+    (counts) per second. The caller must increment the count.
+    """
+
+    def __init__(self):
+        self._start_time = None
+        self._num_occurrences = 0
+
+    def start(self):
+        self._start_time = datetime.now()
+        return self
+
+    def increment(self):
+        self._num_occurrences += 1
+
+    def countsPerSec(self):
+        elapsed_time = (datetime.now() - self._start_time).total_seconds()
+        return self._num_occurrences / elapsed_time
+
+class VideoGet:
+    """
+    Class that continuously gets frames from a VideoCapture object
+    with a dedicated thread.
+    """
+
+    def __init__(self, src=0):
+        self.stream = cv2.VideoCapture(src)
+        (self.grabbed, self.frame) = self.stream.read()
+        self.stopped = False
+    
+    def start(self):
+        Thread(target=self.update, args=()).start()
+        return self
+    
+    def update(self):
+        # keep looping infinitely until the thread is stopped
+        while True:
+          # if the thread indicator variable is set, stop the thread
+          if self.stopped:
+            return
+    
+          # otherwise, read the next frame from the stream
+          (self.grabbed, self.frame) = self.stream.read()
+    
+    def read(self):
+        # return the frame most recently read
+        return self.frame
+
+    def stop(self):
+        self.stopped = True
+
+class VideoShow:
+    """
+    Class that continuously shows a frame using a dedicated thread.
+    """
+
+    def __init__(self, frame=None):
+        self.frame = frame
+        self.stopped = False
+
+    def start(self):
+        Thread(target=self.show, args=()).start()
+        return self
+
+    def show(self):
+        while not self.stopped:
+            cv2.imshow("Video", self.frame)
+            if cv2.waitKey(1) == ord("q"):
+                self.stopped = True
+
+    def stop(self):
+        self.stopped = True
+
+def putIterationsPerSec(frame, iterations_per_sec):
+    """
+    Add iterations per second text to lower-left corner of a frame.
+    """
+
+    cv2.putText(frame, "{:.0f} iterations/sec".format(iterations_per_sec),
+        (10, 450), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255))
+    return frame
 
 def predict_on_image(read_image, model):
     start = time.time()
@@ -63,11 +156,9 @@ def predict_on_image(read_image, model):
     return y_pred_thresh
 
 # Display the image and draw the predicted boxes onto it.
-def display_pedicted_image(read_image, y_pred_thresh):
+def display_pediction_image(read_image, y_pred_thresh):
     # Set the colors for the bounding boxes
-    colors = plt.cm.hsv(np.linspace(0, 1, 21)).tolist()
-    classes = ['background',
-            'Vehicle plate registration']
+    #colors = plt.cm.hsv(np.linspace(0, 1, 21)).tolist()
 
     """
     plt.figure(figsize=(20,12))
@@ -102,15 +193,14 @@ def display_pedicted_image(read_image, y_pred_thresh):
         label = '{}: {:.2f}'.format(classes[int(box[0])], box[1])
         cv2.putText(read_image, label, (xmin, ymin), cv2.FONT_HERSHEY_PLAIN, 1.0, (255,255,255), 1)
 
-    cv2.imshow('SSD Keras Plates recognition', read_image)
-
 
 
 # 1: Build the Keras model
 K.clear_session() # Clear previous models from memory.
+"""
 model = ssd_300(image_size=(img_height, img_width, 3),
                 n_classes=1,
-                mode='inference_fast',
+                mode='inference',
                 l2_regularization=0.005,
                 scales=[0.1, 0.2, 0.37, 0.54, 0.71, 0.88, 1.05], # The scales for MS COCO are [0.07, 0.15, 0.33, 0.51, 0.69, 0.87, 1.05]
                 aspect_ratios_per_layer=[[1.0, 2.0, 0.5],
@@ -137,7 +227,7 @@ model = ssd_300(image_size=(img_height, img_width, 3),
 model.load_weights(model_path, by_name=True)
 
 # 3: Compile the model so that Keras won't complain the next time you load it.
-"""
+
 adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
 
 ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
@@ -145,13 +235,23 @@ ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
 model.compile(optimizer=adam, loss=ssd_loss.compute_loss)
 """
 
+# We need to create an SSDLoss object in order to pass that to the model loader.
+ssd_loss = SSDLoss(neg_pos_ratio=3, n_neg_min=0, alpha=1.0)
+
+model = load_model(model_path, custom_objects={'AnchorBoxes': AnchorBoxes,
+                                               'L2Normalization': L2Normalization,
+                                               'DecodeDetections': DecodeDetections,
+                                               'compute_loss': ssd_loss.compute_loss})
+
+
+
 """
 read_image = cv2.imread(img_path)
 y_pred_thresh = predict_on_image(read_image, model)
 display_pedicted_image(read_image, y_pred_thresh)
 cv2.waitKey()
 """
-
+"""
 # Create a VideoCapture object and read from input file
 # If the input is the camera, pass 0 instead of the video file name
 cap = cv2.VideoCapture(video_path)
@@ -173,7 +273,8 @@ while(cap.isOpened()):
     
     if i == frames_to_skip:
         y_pred_thresh = predict_on_image(frame, model)
-        display_pedicted_image(frame, y_pred_thresh)
+        display_pediction_image(frame, y_pred_thresh)
+        cv2.imshow('SSD Keras Plates recognition', frame)
 
         # Press Q on keyboard to  exit
         if cv2.waitKey(25) & 0xFF == ord('q'):
@@ -191,3 +292,57 @@ cap.release()
  
 # Closes all the frames
 cv2.destroyAllWindows()
+
+"""
+
+
+cap = cv2.VideoCapture(video_path)
+cps = CountsPerSec().start()
+
+while True:
+    (grabbed, frame) = cap.read()
+    if not grabbed or cv2.waitKey(1) == ord("q"):
+        break
+
+    frame = putIterationsPerSec(frame, cps.countsPerSec())
+    y_pred_thresh = predict_on_image(frame, model)  
+    display_pediction_image(frame, y_pred_thresh)
+    cv2.imshow("Video", frame)
+    cps.increment()
+
+
+"""
+
+video_getter = VideoGet(video_path).start()
+cps = CountsPerSec().start()
+while True:
+        if (cv2.waitKey(1) == ord("q")) or video_getter.stopped:
+            video_getter.stop()
+            break
+
+        frame = video_getter.read()
+        frame = putIterationsPerSec(frame, cps.countsPerSec())
+        y_pred_thresh = predict_on_image(frame, model)
+        display_pediction_image(frame, y_pred_thresh)
+        cv2.imshow('SSD Keras Plates recognition', frame)
+        cps.increment()
+"""
+
+"""
+video_getter = VideoGet(video_path).start()
+video_shower = VideoShow(video_getter.frame).start()
+cps = CountsPerSec().start()
+
+while True:
+    if video_getter.stopped or video_shower.stopped:
+        video_shower.stop()
+        video_getter.stop()
+        break
+
+    frame = video_getter.frame
+    frame = putIterationsPerSec(frame, cps.countsPerSec())
+    y_pred_thresh = predict_on_image(frame, model)
+    display_pediction_image(frame, y_pred_thresh)
+    video_shower.frame = frame
+    cps.increment()
+"""
