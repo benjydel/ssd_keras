@@ -67,7 +67,7 @@ K.clear_session() # Clear previous models from memory.
 
 model = ssd_300(image_size=(img_height, img_width, 3),
                 n_classes=n_classes,
-                mode='inference',
+                mode='training',
                 l2_regularization=0.0005,
                 scales=scales,
                 aspect_ratios_per_layer=aspect_ratios,
@@ -78,11 +78,7 @@ model = ssd_300(image_size=(img_height, img_width, 3),
                 variances=variances,
                 normalize_coords=normalize_coords,
                 subtract_mean=mean_color,
-                swap_channels=swap_channels,
-                confidence_thresh=confidence_thresh,
-                iou_threshold=iou_threshold,
-                top_k=200,
-                nms_max_output_size=400)
+                swap_channels=swap_channels)
 
 # 2: Load the trained weights into the model.
 
@@ -93,5 +89,19 @@ adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
 ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
 
 model.compile(optimizer=adam, loss=ssd_loss.compute_loss)
+
+import json
+from keras.models import load_model
+
+"""
+config = model.get_config()
+print(config)
+with open('../ssd_keras_files/model.config', 'w+') as f:
+    json.dump(config, f)
+
+json_config = model.to_json()
+with open('../ssd_keras_files/model.json', 'w') as json_file:
+    json_file.write(json_config)
+"""
 
 model.save(filepath=model_path_output)

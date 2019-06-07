@@ -1,6 +1,9 @@
 # Needed libraries
 import argparse
 
+from ssd_encoder_decoder.ssd_output_decoder import decode_detections
+from data_generator.object_detection_2d_misc_utils import apply_inverse_transforms
+
 import numpy as np
 import random
 import cv2
@@ -10,13 +13,15 @@ from datetime import datetime
 import time
 
 
-
+# exemple :
+# python3 inference_ssd300.py --model "../ssd_keras_files/ssd300_OID_plates_MODEL.h5" --classes "Vehicle registration plates" --file "../ssd_keras_files/Test AR DOD RC500S A6.mp4" --mode keras --confidence 0.2
+# python3 inference_ssd300.py --model "../ssd_keras_files/ssd300_OID_plates_frozen_model.pb" --classes "plates" --file "../ssd_keras_files/Collection_VM.jpg" --mode tf
 parser = argparse.ArgumentParser(description='Make inference on SSD 300 model with Keras, TensorFlow or OpenVINO')
 parser.add_argument("--mode", help="tf for Tensorflow, keras or ov for OpenVINO", required=False, default="tf", choices=('tf', 'keras', 'ov'))
 parser.add_argument("--model", help="The path to the model (.pf for tf, .h5 for keras, ...)", required=True)
 parser.add_argument("--classes", help="Names of object classes to be downloaded", required=True)
 parser.add_argument("--file", help="Path to the file (Image or Video)", required=True)
-parser.add_argument("--confidence", help="The confidence threshold for predictions", required=False, type=int, default=0.5)
+parser.add_argument("--confidence", help="The confidence threshold for predictions", required=False, type=float, default=0.5)
 parser.add_argument("--display", help="Bool to either display or not the predictions", required=False, default=True, choices=(True, False))
 
 args = parser.parse_args()
@@ -34,6 +39,9 @@ for class_name in args.classes.split(','):
 #SSD300 PARAMETERS
 img_height = 300
 img_width = 300
+
+iou_threshold = 0.4
+top_k = 200
 
 
 n_classes = len(classes) # Number of positive classes
@@ -132,7 +140,7 @@ def predict_on_image_tf(frame, sess):
 
     img = img.astype(float)
     
-    #On affecte -1 en premiere dimension, ce qui correspond à un ? dans la premiere couche du model
+    #Add -1 on the first dimension which correspond to the interrogation mark "?" within the first model layer of frozen graph converted from keras
     resized_shape_img = img.reshape([-1, 300, 300, 3])
     
     #To found the input and output layers :
@@ -143,11 +151,19 @@ def predict_on_image_tf(frame, sess):
             print("Tensor Stats :",str(op.values()))     # Tensor name
     """
     # inference by the model (op name must comes with :0 to specify the index of its input and output)
-    tensor_input = sess.graph.get_tensor_by_name('import/input_1:0')
-    tensor_output = sess.graph.get_tensor_by_name('import/decoded_predictions/loop_over_batch/TensorArrayStack/TensorArrayGatherV3:0')
+    tensor_input = sess.graph.get_tensor_by_name('input_1:0')
+    tensor_output = sess.graph.get_tensor_by_name('predictions/concat:0')
 
     #Prediction :
     y_pred = sess.run(tensor_output, {tensor_input: resized_shape_img})
+
+    y_pred_decoded = decode_detections(y_pred,
+                                   confidence_thresh=confidence_threshold,
+                                   iou_threshold=iou_threshold,
+                                   top_k=top_k,
+                                   normalize_coords=True,
+                                   img_height=img_height,
+                                   img_width=img_width)
 
     ####TIME####
     timebreak = time.time()
@@ -155,15 +171,15 @@ def predict_on_image_tf(frame, sess):
     print("Time taken to make predictions: {0} seconds".format(seconds))
     ############
 
-    y_pred_thresh = [y_pred[k][y_pred[k,:,1] > confidence_threshold] for k in range(y_pred.shape[0])]
+  #  y_pred_thresh = [y_pred[k][y_pred[k,:,1] > confidence_threshold] for k in range(y_pred.shape[0])]
 
-    if y_pred_thresh[0].size != 0:
+    if y_pred_decoded[0].size != 0:
         np.set_printoptions(precision=2, suppress=True, linewidth=90)
         print("Predicted boxes:\n")
         print('   class   conf xmin   ymin   xmax   ymax')
-        print(y_pred_thresh[0])
+        print(y_pred_decoded[0])
 
-    return y_pred_thresh
+    return y_pred_decoded
 
 def predict_on_image(frame, model):
     start = time.time()
@@ -171,21 +187,29 @@ def predict_on_image(frame, model):
     img = image.img_to_array(cv2.resize(frame, (img_height, img_width))) 
 
     y_pred = model.predict(np.array([img]))
+
+    y_pred_decoded = decode_detections(y_pred,
+                                confidence_thresh=confidence_threshold,
+                                iou_threshold=iou_threshold,
+                                top_k=top_k,
+                                normalize_coords=True,
+                                img_height=img_height,
+                                img_width=img_width)
     ####TIME####
     timebreak = time.time()
     seconds = timebreak - start
     print("Time taken to make predictions: {0} seconds".format(seconds))
     ############
 
-    y_pred_thresh = [y_pred[k][y_pred[k,:,1] > confidence_threshold] for k in range(y_pred.shape[0])]
+    #y_pred_thresh = [y_pred[k][y_pred[k,:,1] > confidence_threshold] for k in range(y_pred.shape[0])]
 
-    if y_pred_thresh:
+    if y_pred_decoded:
         np.set_printoptions(precision=2, suppress=True, linewidth=90)
         print("Predicted boxes:\n")
         print('   class   conf xmin   ymin   xmax   ymax')
-        print(y_pred_thresh[0])
+        print(y_pred_decoded[0])
 
-    return y_pred_thresh
+    return y_pred_decoded
 
 # Display the image and draw the predicted boxes onto it.
 def display_pediction_image(frame, y_pred_thresh):
@@ -194,10 +218,10 @@ def display_pediction_image(frame, y_pred_thresh):
         classId = int(box[0])-1
         score = box[1]
         color = colors[classId]
-        xmin = int(box[2] * frame.shape[1] / img_width)
-        ymin = int(box[3] * frame.shape[0] / img_height)
-        xmax = int(box[4] * frame.shape[1] / img_width)
-        ymax = int(box[5] * frame.shape[0] / img_height)
+        xmin = abs(int(box[2] * frame.shape[1] / img_width))
+        ymin = abs(int(box[3] * frame.shape[0] / img_height))
+        xmax = abs(int(box[4] * frame.shape[1] / img_width))
+        ymax = abs(int(box[5] * frame.shape[0] / img_height))
         cv2.blur(src=frame[ymin:ymax, xmin:xmax],dst=frame[ymin:ymax, xmin:xmax], ksize=(20,10))
         cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, thickness=2)
         label = '{}: {:.2f}'.format(classes[classId], box[1])
@@ -265,18 +289,19 @@ elif(run_mode == "tf") :
 
     with tf.Session() as sess:
         # load model from pb file
-        with gfile.FastGFile(model_path,'rb') as f:
+        
+        with gfile.GFile(model_path,'rb') as f:
             graph_def = tf.GraphDef()
             graph_def.ParseFromString(f.read())
             sess.graph.as_default()
-            g_in = tf.import_graph_def(graph_def)
+            g_in = tf.import_graph_def(graph_def, name="") #name = "" remove the import/ to the layers names
         # write to tensorboard (check tensorboard for each op names)
         writer = tf.summary.FileWriter('../ssd_keras_files/log/')
         writer.add_graph(sess.graph)
         writer.flush()
         writer.close()
-        # print all operation names 
-
+        
+        
         run_on_file(file_path, sess)
 # IF OPENVINO
 else :

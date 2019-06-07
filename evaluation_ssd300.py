@@ -20,9 +20,9 @@ model_mode = 'inference'
 matching_iou_threshold = 0.5
 batch_size = 8
 
-images_dir = ['../../Datasets/OpenImages_face_plate/train/Vehicle registration plate/']
-annotations_dir = ['../../Datasets/OpenImages_face_plate/train/Vehicle registration plate/To_PASCAL_XML/']
-filename = ['../../Datasets/OpenImages_face_plate/train/Vehicle registration plate/ImageSets/filenames_xml.txt']
+images_dir = ['../../Datasets/OpenImages_face_plate/validation/Vehicle registration plate/']
+annotations_dir = ['../../Datasets/OpenImages_face_plate/validation/Vehicle registration plate/To_PASCAL_XML/']
+filename = ['../../Datasets/OpenImages_face_plate/validation/Vehicle registration plate/ImageSets/filenames_xml.txt']
 
 classes = ['Vehicle registration plate']
 
@@ -92,7 +92,7 @@ n = 2
 fig, cells = plt.subplots(m, n, figsize=(n*8,m*8))
 for i in range(m):
     for j in range(n):
-        if n*i+j+1 > classes_n_background: break
+        if n*i+j+1 > n_classes: break
         cells[i, j].plot(recalls[n*i+j+1], precisions[n*i+j+1], color='blue', linewidth=1.0)
         cells[i, j].set_xlabel('recall', fontsize=14)
         cells[i, j].set_ylabel('precision', fontsize=14)
