@@ -145,12 +145,16 @@ def predict_on_image_tf(frame, sess):
     
     #To found the input and output layers :
     """
+    i = 0
     print('\n===== ouptut operation names =====\n')
     for op in sess.graph.get_operations():
+        if(i<5):
             print("Operation Name :",op.name)         # Operation name
             print("Tensor Stats :",str(op.values()))     # Tensor name
+            i+=1
     """
     # inference by the model (op name must comes with :0 to specify the index of its input and output)
+
     tensor_input = sess.graph.get_tensor_by_name('input_1:0')
     tensor_output = sess.graph.get_tensor_by_name('predictions/concat:0')
 
@@ -250,7 +254,8 @@ def run_on_file(file_path, model_or_sess) :
         cv2.imshow("Inference on "+file_path, frame)
         cps.increment()
 
-    cv2.waitKey()
+    if file_is_image is True :
+        cv2.waitKey()
     cv2.destroyAllWindows()
 
 ## IF KERAS
@@ -286,7 +291,11 @@ if(run_mode == "keras") :
 elif(run_mode == "tf") :
     import tensorflow as tf
     from tensorflow.python.platform import gfile
-
+    """
+    config = tf.ConfigProto()
+    config.intra_op_parallelism_threads = 44
+    config.inter_op_parallelism_threads = 44
+    """
     with tf.Session() as sess:
         # load model from pb file
         
@@ -295,12 +304,14 @@ elif(run_mode == "tf") :
             graph_def.ParseFromString(f.read())
             sess.graph.as_default()
             g_in = tf.import_graph_def(graph_def, name="") #name = "" remove the import/ to the layers names
+
         # write to tensorboard (check tensorboard for each op names)
+        """
         writer = tf.summary.FileWriter('../ssd_keras_files/log/')
         writer.add_graph(sess.graph)
         writer.flush()
         writer.close()
-        
+        """
         
         run_on_file(file_path, sess)
 # IF OPENVINO

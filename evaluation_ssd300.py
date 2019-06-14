@@ -15,8 +15,8 @@ from data_generator.object_detection_2d_data_generator import DataGenerator
 from eval_utils.average_precision_evaluator import Evaluator
 
 ########################################## TO CONFIGURE ##############################################
-model_path = '../ssd_keras_files/ssd300_OID_plates_MODEL.h5'
-model_mode = 'inference'
+model_path = '../ssd_keras_files/4-ssd300_OID_plates_1000step_per_epoch_reduceOnPlateau.h5'
+model_mode = 'training'
 matching_iou_threshold = 0.5
 batch_size = 8
 
