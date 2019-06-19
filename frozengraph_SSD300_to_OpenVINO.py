@@ -1,6 +1,9 @@
 import os
 import argparse
 
+
+#python3 /opt/intel/openvino/deployment_tools/model_optimizer/mo_tf.py --log_level DEBUG --input_model "../ssd_keras_files/ssd300_OID_plates_frozen_model_training.pb" --output_dir "../ssd_keras_files/" --input_shape [1,300,300,3]  --reverse_input_channels --keep_shape_ops --data_type FP16  2>&1 | tee -a "../ssd_keras_files/log_openvino.log" 
+
 # exemple :
 # python3 keras_SSD300_to_frozengraph_tf.py --model_path "../ssd_keras_files/ssd300_OID_plates_2105_MODEL.h5" --save_dir "../ssd_keras_files/" --save_name "ssd300_OID_plates_frozen_model.pb"
 parser = argparse.ArgumentParser(description='Convert TensorFlow frozen graph .pb file to optimized OpenVINO .xml and .bin files')

@@ -20,9 +20,9 @@ model_mode = 'training'
 matching_iou_threshold = 0.5
 batch_size = 8
 
-images_dir = ['../../Datasets/OpenImages_face_plate/validation/Vehicle registration plate/']
-annotations_dir = ['../../Datasets/OpenImages_face_plate/validation/Vehicle registration plate/To_PASCAL_XML/']
-filename = ['../../Datasets/OpenImages_face_plate/validation/Vehicle registration plate/ImageSets/filenames_xml.txt']
+images_dir = ['../../Datasets/OpenImages_face_plate/test/Vehicle registration plate/']
+annotations_dir = ['../../Datasets/OpenImages_face_plate/test/Vehicle registration plate/To_PASCAL_XML/']
+filename = ['../../Datasets/OpenImages_face_plate/test/Vehicle registration plate/ImageSets/filenames_xml.txt']
 
 classes = ['Vehicle registration plate']
 

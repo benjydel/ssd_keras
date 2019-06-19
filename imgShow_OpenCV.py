@@ -106,23 +106,40 @@ def putIterationsPerSec(frame, iterations_per_sec):
     cv2.putText(frame, "{:.0f} iterations/sec".format(iterations_per_sec), (0, frame.shape[0]-10), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255))
     return frame
 
-def run_on_file(file_path, model_or_sess) :
-    cap = cv2.VideoCapture(file_path)
-    cps = CountsPerSec().start()
 
-    while True:
-        (grabbed, frame) = cap.read()
-        if not grabbed or cv2.waitKey(1) == ord("q"):
-            break
-        
-        if file_is_image is not True :
-            frame = putIterationsPerSec(frame, cps.countsPerSec())
+start = time.time()
+cap = cv2.VideoCapture(file_path)
+####TIME####
+timebreak = time.time()
+seconds = timebreak - start
+print("Time VideoCapture: {0} seconds".format(seconds))
+############
+cps = CountsPerSec().start()
 
-        cv2.imshow("Inference on "+file_path, frame)
-        cps.increment()
-    if file_is_image is True :
-        cv2.waitKey()
-    cv2.destroyAllWindows()
+while True:
+    start = time.time()
+    (grabbed, frame) = cap.read()
+    ####TIME####
+    timebreak = time.time()
+    seconds = timebreak - start
+    print("Time cap.read: {0} seconds".format(seconds))
+    ############
+    if not grabbed or cv2.waitKey(1) == ord("q"):
+        break
+    
+    if file_is_image is not True :
+        frame = putIterationsPerSec(frame, cps.countsPerSec())
 
+    start = time.time()
+    cv2.imshow("Inference on "+file_path, frame)
+    ####TIME####
+    timebreak = time.time()
+    seconds = timebreak - start
+    print("Time imshow: {0} seconds".format(seconds))
+    ############
+    cps.increment()
 
-run_on_file(file_path, None)
+if file_is_image is True :
+    cv2.waitKey()
+    
+cv2.destroyAllWindows()

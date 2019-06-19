@@ -56,7 +56,7 @@ random_rotate         = RandomRotate()
 
 
 data_augmentation = [
-                    ssd_data_augmentation
+#                    ssd_data_augmentation
                     ]
 
 generator = dataset.generate(batch_size=1,
