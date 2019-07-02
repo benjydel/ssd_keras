@@ -116,7 +116,7 @@ print("Time VideoCapture: {0} seconds".format(seconds))
 ############
 cps = CountsPerSec().start()
 
-while True:
+while cap.isOpened():
     start = time.time()
     (grabbed, frame) = cap.read()
     ####TIME####
@@ -124,8 +124,6 @@ while True:
     seconds = timebreak - start
     print("Time cap.read: {0} seconds".format(seconds))
     ############
-    if not grabbed or cv2.waitKey(1) == ord("q"):
-        break
     
     if file_is_image is not True :
         frame = putIterationsPerSec(frame, cps.countsPerSec())
@@ -138,6 +136,8 @@ while True:
     print("Time imshow: {0} seconds".format(seconds))
     ############
     cps.increment()
+    if not grabbed or cv2.waitKey(1) == ord("q"):
+        break
 
 if file_is_image is True :
     cv2.waitKey()
