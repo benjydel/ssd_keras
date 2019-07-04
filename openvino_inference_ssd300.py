@@ -136,9 +136,9 @@ def predict_on_image_ov(frame, net):
     start = time.time()
     #pred : num_detections, detection_classes, detection_scores, detection_boxes (ymin, xmin, ymax, xmax)
     y_preds = net.forward()
-    print(y_preds)
+    #print(y_preds)
     end = time.time()
-    print("\t[INFO] classification took " + str((end-start)*1000) + " ms")
+    print("\t[INFO] net forward took " + str((end-start)*1000) + " ms")
     
     start = time.time()
     y_pred_arrange = np.squeeze(y_preds)[:,1:]
@@ -179,7 +179,10 @@ def display_pediction_image(frame, y_pred_thresh):
         cv2.putText(frame, label, (xmin, ymin-2), cv2.FONT_HERSHEY_PLAIN, 1.0, color, 1)
 
 def run_on_file(file_path, model_or_sess) :
-    cap = cv2.VideoCapture(file_path)
+    start = time.time()
+    cap = cv2.VideoCapture(file_path,cv2.CAP_FFMPEG)
+    end = time.time()
+    print("[INFO] video capture took " + str((end-start)*1000) + " ms")
     cps = CountsPerSec().start()
 
     while True:
@@ -196,7 +199,7 @@ def run_on_file(file_path, model_or_sess) :
         start = time.time()
         y_pred_thresh = predict_on_image_ov(frame, model_or_sess)
         end = time.time()
-        print("[INFO] Prediction took " + str((end-start)*1000) + " ms")
+        print("--> Total Prediction took " + str((end-start)*1000) + " ms")
 
         start = time.time()
         if file_is_image is not True :
@@ -229,6 +232,7 @@ net = cv2.dnn.readNet( model_name+".bin",model_name+".xml")
 net.setPreferableBackend(cv2.dnn.DNN_BACKEND_INFERENCE_ENGINE) #
 net.setPreferableTarget(cv2.dnn.DNN_TARGET_MYRIAD)
 
+#First pass of the network with an empty array to allocate all the memory space.
 net.setInput(np.zeros((1,3,300,300), dtype = "float32"))
 net.forward()
 
