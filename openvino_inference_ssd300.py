@@ -4,32 +4,45 @@ import cv2
 from threading import Thread
 from datetime import datetime
 import random
+import argparse
 
+parser = argparse.ArgumentParser(description='Make inference on SSD 300 model TensorFlow or OpenVINO')
+parser.add_argument("--mode", help="tf for Tensorflow, tf_gpu for tensorflow with GPU, or ov for OpenVINO", required=False, default="tf", choices=('tf', 'tf_gpu', 'ov'))
+parser.add_argument("--model_name", help="The path to the model (Do not write the extension .pb, .bin, .xml ...)", required=True)
+parser.add_argument("--classes", help="Names of object classes to be downloaded", required=True)
+parser.add_argument("--file", help="Path to the file (Image or Video)", required=True)
+parser.add_argument("--confidence", help="The confidence threshold for predictions", required=False, type=float, default=0.5)
+parser.add_argument("--display", help="Bool to either display or not the predictions", required=False, default=True, choices=(True, False))
+
+args = parser.parse_args()
+run_mode = args.mode
+model_name = args.model_name
+file_path = args.file
+file_is_image = (cv2.imread(file_path) is not None)
+print(file_is_image)
+confidence_threshold = args.confidence
+display_bool = args.display
+classes = []
+for class_name in args.classes.split(','):
+    classes.append(class_name)
+
+n_classes = len(classes) # Number of positive classes
+classes_n_background = ['background'] + classes
+colors = [ (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)) for i in range(len(classes)) ] #Creation of random colors according to the positive class number
+
+
+#SSD300 PARAMETERS
+img_height = 300
+img_width = 300
+
+"""
 model_name = "../ssd_keras_files/frozen_inference_graph"
 model_bin = "../ssd_keras_files/frozen_inference_graph.bin"
 model_xml = "../ssd_keras_files/frozen_inference_graph.xml"
 confidence_threshold = 0.5
 
 file_path = "../ssd_keras_files/Test AR DOD RC500S A6.mp4"
-
-
-file_is_image = (cv2.imread(file_path) is not None)
-print(file_is_image)
-confidence_threshold = 0.2
-classes = ["plate"]
-
-#SSD300 PARAMETERS
-img_height = 300
-img_width = 300
-
-iou_threshold = 0.4
-top_k = 200
-
-
-n_classes = len(classes) # Number of positive classes
-classes_n_background = ['background'] + classes
-colors = [ (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)) for i in range(len(classes)) ] #Creation of random colors according to the positive class number
-
+"""
 
 class CountsPerSec:
     """
@@ -119,9 +132,51 @@ def putIterationsPerSec(frame, iterations_per_sec):
     cv2.putText(frame, "{:.0f} iterations/sec".format(iterations_per_sec), (0, frame.shape[0]-10), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255))
     return frame
 
-def predict_on_image_ov(frame, net):
+def run_inference_for_single_image(image, graph):
+    #to set shape to [1, width, height, 3] instead of [width, height, 3]
+    #tensorflow model already contain reshape function using while loop
+    img_reshaped = np.expand_dims(image, axis=0)
+
+    with graph.as_default():
+        with tf.Session() as sess:
+            # Get handles to input and output tensors
+            ops = tf.get_default_graph().get_operations()
+            all_tensor_names = {output.name for op in ops for output in op.outputs}
+            tensor_dict = {}
+            for key in ['num_detections', 'detection_boxes', 'detection_scores', 'detection_classes']:
+                tensor_name = key + ':0'
+                if tensor_name in all_tensor_names:
+                    tensor_dict[key] = tf.get_default_graph().get_tensor_by_name(
+                        tensor_name)
+            
+            image_tensor = tf.get_default_graph().get_tensor_by_name('image_tensor:0')
+
+            # Run inference
+            output_dict = sess.run(tensor_dict,
+                                    feed_dict={image_tensor: img_reshaped})
+
+            # all outputs are float32 numpy arrays, so convert types as appropriate
+            output_dict['num_detections'] = int(output_dict['num_detections'][0])
+            output_dict['detection_classes'] = output_dict['detection_classes'][0].astype(np.int64)
+            output_dict['detection_boxes'] = output_dict['detection_boxes'][0]
+            output_dict['detection_scores'] = output_dict['detection_scores'][0]
+   
+    y_pred = np.column_stack( 
+            (np.column_stack(
+                (output_dict['detection_classes'],
+                output_dict['detection_scores'])
+            ),
+            output_dict['detection_boxes'])
+        )
+   
+    #change the order for xmin, xmax, ymin, ymax
+    return y_pred[...,[0,1,3,2,5,4]]
+
+def net_forward_cv2_openvino(frame, net):
+    #to set shape to [1, width, height, 3] instead of [width, height, 3]
+    #openVINO model does not contain reshape function because tensorflow uses while loop which OpenVINO does not support
     start = time.time()
-    blob = cv2.dnn.blobFromImage(frame,1,(300,300))
+    blob = cv2.dnn.blobFromImage(frame,1,(img_width,img_height))
     #print(blob.shape)
     print(blob.dtype)
     end = time.time()
@@ -140,23 +195,34 @@ def predict_on_image_ov(frame, net):
     end = time.time()
     print("\t[INFO] net forward took " + str((end-start)*1000) + " ms")
     
-    start = time.time()
     y_pred_arrange = np.squeeze(y_preds)[:,1:]
-    #print(y_pred_arrange)
-    
+
+    return y_pred_arrange
+
+def predict_on_image(frame, net_or_graph, run_mode):
+    start = time.time()
+    if(run_mode == "ov"):
+        y_pred = net_forward_cv2_openvino(frame, net_or_graph)
+    else:
+        y_pred = run_inference_for_single_image(frame, net_or_graph)
+
+    end = time.time()
+    print("--> Total Prediction took " + str((end-start)*1000) + " ms")
+
+    start = time.time()
     y_pred_thresh = []
-    for k in range(y_pred_arrange.shape[0]):
-        if(y_pred_arrange[k][1] > confidence_threshold):
-            y_pred_thresh.append(y_pred_arrange[k])
+    for k in range(y_pred.shape[0]):
+        if(y_pred[k][1] > confidence_threshold):
+            y_pred_thresh.append(y_pred[k])
 
     y_pred_thresh = np.array(y_pred_thresh)
     end = time.time()
-    print("\t[INFO] arrange array took " + str((end-start)*1000) + " ms")
+    print("\t[INFO] keep threshold values array took " + str((end-start)*1000) + " ms")
 
     if y_pred_thresh.size != 0:
         np.set_printoptions(precision=2, suppress=True, linewidth=90)
         print("Predicted boxes:\n")
-        print('   class   conf xmin   ymin   xmax   ymax')
+        print('   class   score xmin   ymin   xmax   ymax')
         print(y_pred_thresh)
     
     return y_pred_thresh
@@ -178,7 +244,7 @@ def display_pediction_image(frame, y_pred_thresh):
         cv2.rectangle(frame, (xmin, ymin-2), (int(xmin+len(label)*8.5), ymin-15), (255,255,255), thickness=cv2.FILLED)
         cv2.putText(frame, label, (xmin, ymin-2), cv2.FONT_HERSHEY_PLAIN, 1.0, color, 1)
 
-def run_on_file(file_path, model_or_sess) :
+def run_on_file(file_path, net_or_graph, run_mode) :
     start = time.time()
     cap = cv2.VideoCapture(file_path,cv2.CAP_FFMPEG)
     end = time.time()
@@ -196,10 +262,7 @@ def run_on_file(file_path, model_or_sess) :
         end = time.time()
         print("[INFO] Wait key took " + str((end-start)*1000) + " ms")
 
-        start = time.time()
-        y_pred_thresh = predict_on_image_ov(frame, model_or_sess)
-        end = time.time()
-        print("--> Total Prediction took " + str((end-start)*1000) + " ms")
+        y_pred_thresh = predict_on_image(frame, net_or_graph, run_mode)
 
         start = time.time()
         if file_is_image is not True :
@@ -225,18 +288,36 @@ def run_on_file(file_path, model_or_sess) :
         cv2.waitKey()
     cv2.destroyAllWindows()
 
-
-
 print("[INFO] loading model...")
-net = cv2.dnn.readNet( model_name+".bin",model_name+".xml")
-net.setPreferableBackend(cv2.dnn.DNN_BACKEND_INFERENCE_ENGINE) #
-net.setPreferableTarget(cv2.dnn.DNN_TARGET_MYRIAD)
+## IF OpenVino
+if(run_mode == "ov") :
+    net = cv2.dnn.readNet( model_name+".bin",model_name+".xml")
+    net.setPreferableBackend(cv2.dnn.DNN_BACKEND_INFERENCE_ENGINE) #
+    net.setPreferableTarget(cv2.dnn.DNN_TARGET_MYRIAD)
 
-#First pass of the network with an empty array to allocate all the memory space.
-net.setInput(np.zeros((1,3,300,300), dtype = "float32"))
-net.forward()
+    #First pass of the network with an empty array to allocate all the memory space.
+    net.setInput(np.zeros((1,3,300,300), dtype = "float32"))
+    net.forward()
+    net_or_graph = net
+else :
+    if(run_mode == "tf"):
+        import os
+        #disable de GPU visibility for tensorflow
+        os.environ["CUDA_VISIBLE_DEVICES"]="-1"
 
-run_on_file(file_path, net)
+    import tensorflow as tf
+    from tensorflow.python.platform import gfile
+        
+    detection_graph = tf.Graph()
+    with detection_graph.as_default():
+        od_graph_def = tf.GraphDef()
+        with tf.gfile.GFile(model_name+".pb", 'rb') as fid:
+            serialized_graph = fid.read()
+            od_graph_def.ParseFromString(serialized_graph)
+            tf.import_graph_def(od_graph_def, name='')
+    net_or_graph = detection_graph
+
+run_on_file(file_path, net_or_graph, run_mode)
 
 
 
