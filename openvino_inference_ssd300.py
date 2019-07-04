@@ -6,6 +6,9 @@ from datetime import datetime
 import random
 import argparse
 
+#exemple:
+#python3 openvino_inference_ssd300.py --mode=tf_gpu --model_name=../ssd_keras_files/plate_inference_graph_retrained/frozen_inference_graph --classes="plates" --file=../ssd_keras_files/vehiculesutilitairesW.png --confidence=0.2
+#python3 openvino_inference_ssd300.py --mode=ov --model_name=/home/root/ssd_keras_files/frozen_inference_graph --classes="plates" --file="/home/root/ssd_keras_files/Test AR DOD RC500S A6.mp4" --confidence=0.2
 parser = argparse.ArgumentParser(description='Make inference on SSD 300 model TensorFlow or OpenVINO')
 parser.add_argument("--mode", help="tf for Tensorflow, tf_gpu for tensorflow with GPU, or ov for OpenVINO", required=False, default="tf", choices=('tf', 'tf_gpu', 'ov'))
 parser.add_argument("--model_name", help="The path to the model (Do not write the extension .pb, .bin, .xml ...)", required=True)
@@ -34,15 +37,6 @@ colors = [ (random.randint(0, 255), random.randint(0, 255), random.randint(0, 25
 #SSD300 PARAMETERS
 img_height = 300
 img_width = 300
-
-"""
-model_name = "../ssd_keras_files/frozen_inference_graph"
-model_bin = "../ssd_keras_files/frozen_inference_graph.bin"
-model_xml = "../ssd_keras_files/frozen_inference_graph.xml"
-confidence_threshold = 0.5
-
-file_path = "../ssd_keras_files/Test AR DOD RC500S A6.mp4"
-"""
 
 class CountsPerSec:
     """
@@ -133,10 +127,14 @@ def putIterationsPerSec(frame, iterations_per_sec):
     return frame
 
 def run_inference_for_single_image(image, graph):
+    start = time.time()
     #to set shape to [1, width, height, 3] instead of [width, height, 3]
     #tensorflow model already contain reshape function using while loop
     img_reshaped = np.expand_dims(image, axis=0)
+    end = time.time()
+    print("\t[INFO] Reshape took " + str((end-start)*1000) + " ms")
 
+    start = time.time()
     with graph.as_default():
         with tf.Session() as sess:
             # Get handles to input and output tensors
@@ -148,13 +146,18 @@ def run_inference_for_single_image(image, graph):
                 if tensor_name in all_tensor_names:
                     tensor_dict[key] = tf.get_default_graph().get_tensor_by_name(
                         tensor_name)
-            
+
             image_tensor = tf.get_default_graph().get_tensor_by_name('image_tensor:0')
+            end = time.time()
+            print("\t[INFO] set input and output " + str((end-start)*1000) + " ms")
 
+            start = time.time()
             # Run inference
-            output_dict = sess.run(tensor_dict,
-                                    feed_dict={image_tensor: img_reshaped})
+            output_dict = sess.run(tensor_dict, feed_dict={image_tensor: img_reshaped})
+            end = time.time()
+            print("\t[INFO] net forward took " + str((end-start)*1000) + " ms")
 
+            start = time.time()
             # all outputs are float32 numpy arrays, so convert types as appropriate
             output_dict['num_detections'] = int(output_dict['num_detections'][0])
             output_dict['detection_classes'] = output_dict['detection_classes'][0].astype(np.int64)
@@ -168,7 +171,9 @@ def run_inference_for_single_image(image, graph):
             ),
             output_dict['detection_boxes'])
         )
-   
+    
+    end = time.time()
+    print("\t[INFO] compute numpy array took " + str((end-start)*1000) + " ms")
     #change the order for xmin, xmax, ymin, ymax
     return y_pred[...,[0,1,3,2,5,4]]
 
@@ -180,14 +185,14 @@ def net_forward_cv2_openvino(frame, net):
     #print(blob.shape)
     print(blob.dtype)
     end = time.time()
-    print("\t[INFO] blob took " + str((end-start)*1000) + " ms")
+    print("\t[INFO] Reshape took " + str((end-start)*1000) + " ms")
     
     # set the blob as input to the network and perform a forward-pass to
     # obtain our output classification
     start = time.time()
     net.setInput(blob)
     end = time.time()
-    print("\t[INFO] set blob took " + str((end-start)*1000) + " ms")
+    print("\t[INFO] set input " + str((end-start)*1000) + " ms")
     start = time.time()
     #pred : num_detections, detection_classes, detection_scores, detection_boxes (ymin, xmin, ymax, xmax)
     y_preds = net.forward()
@@ -217,7 +222,7 @@ def predict_on_image(frame, net_or_graph, run_mode):
 
     y_pred_thresh = np.array(y_pred_thresh)
     end = time.time()
-    print("\t[INFO] keep threshold values array took " + str((end-start)*1000) + " ms")
+    print("[INFO] keep threshold values array took " + str((end-start)*1000) + " ms")
 
     if y_pred_thresh.size != 0:
         np.set_printoptions(precision=2, suppress=True, linewidth=90)
