@@ -321,7 +321,7 @@ def run_on_file(file_path, net_or_graph, run_mode) :
         cv2.waitKey()
     cv2.destroyAllWindows()
 
-print("[INFO] loading model...")
+print("First pass through the model to load it in RAM")
 ## IF OpenVino
 if(run_mode == "ov") :
     net = cv2.dnn.readNet( model_name+".bin",model_name+".xml")
@@ -329,9 +329,7 @@ if(run_mode == "ov") :
     net.setPreferableTarget(cv2.dnn.DNN_TARGET_MYRIAD)
 
     #First pass of the network with an empty array to allocate all the memory space.
-    net.setInput(np.zeros((1,3,300,300), dtype = "float32"))
-    net.forward()
-    net_or_graph = net
+    net_forward_cv2_openvino(np.zeros((300, 300, 3), dtype = "float32"), net)
 
     run_on_file(file_path, net, run_mode)
 else :
@@ -351,6 +349,9 @@ else :
             graph_def.ParseFromString(f.read())
             sess.graph.as_default()
             g_in = tf.import_graph_def(graph_def, name="") #name = "" remove the import/ to the layers names
+
+            #First pass of the network with an empty array to allocate all the memory space.
+            run_inference_for_single_image(np.zeros((300, 300, 3), dtype = "float32"), sess)
 
             run_on_file(file_path, sess, run_mode)
 
