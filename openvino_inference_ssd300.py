@@ -126,7 +126,7 @@ def putIterationsPerSec(frame, iterations_per_sec):
     cv2.putText(frame, "{:.0f} iterations/sec".format(iterations_per_sec), (0, frame.shape[0]-10), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255))
     return frame
 
-def run_inference_for_single_image(image, graph):
+def run_inference_for_single_image(image, sess):
     start = time.time()
     #to set shape to [1, width, height, 3] instead of [width, height, 3]
     #tensorflow model already contain reshape function using while loop
@@ -135,6 +135,7 @@ def run_inference_for_single_image(image, graph):
     print("\t[INFO] Reshape took " + str((end-start)*1000) + " ms")
 
     start = time.time()
+    """
     with graph.as_default():
         with tf.Session() as sess:
             # Get handles to input and output tensors
@@ -163,7 +164,34 @@ def run_inference_for_single_image(image, graph):
             output_dict['detection_classes'] = output_dict['detection_classes'][0].astype(np.int64)
             output_dict['detection_boxes'] = output_dict['detection_boxes'][0]
             output_dict['detection_scores'] = output_dict['detection_scores'][0]
-   
+    """
+    # Get handles to input and output tensors
+    ops = sess.graph.get_operations()
+    all_tensor_names = {output.name for op in ops for output in op.outputs}
+    tensor_dict = {}
+    for key in ['num_detections', 'detection_boxes', 'detection_scores', 'detection_classes']:
+        tensor_name = key + ':0'
+        if tensor_name in all_tensor_names:
+            tensor_dict[key] = sess.graph.get_tensor_by_name(
+                tensor_name)
+
+    image_tensor = sess.graph.get_tensor_by_name('image_tensor:0')
+    end = time.time()
+    print("\t[INFO] set input and output " + str((end-start)*1000) + " ms")
+
+    start = time.time()
+    # Run inference
+    output_dict = sess.run(tensor_dict, feed_dict={image_tensor: img_reshaped})
+    end = time.time()
+    print("\t[INFO] net forward took " + str((end-start)*1000) + " ms")
+
+    start = time.time()
+    # all outputs are float32 numpy arrays, so convert types as appropriate
+    output_dict['num_detections'] = int(output_dict['num_detections'][0])
+    output_dict['detection_classes'] = output_dict['detection_classes'][0].astype(np.int64)
+    output_dict['detection_boxes'] = output_dict['detection_boxes'][0]
+    output_dict['detection_scores'] = output_dict['detection_scores'][0]
+
     y_pred = np.column_stack( 
             (np.column_stack(
                 (output_dict['detection_classes'],
@@ -204,12 +232,12 @@ def net_forward_cv2_openvino(frame, net):
 
     return y_pred_arrange
 
-def predict_on_image(frame, net_or_graph, run_mode):
+def predict_on_image(frame, net_or_sess, run_mode):
     start = time.time()
     if(run_mode == "ov"):
-        y_pred = net_forward_cv2_openvino(frame, net_or_graph)
+        y_pred = net_forward_cv2_openvino(frame, net_or_sess)
     else:
-        y_pred = run_inference_for_single_image(frame, net_or_graph)
+        y_pred = run_inference_for_single_image(frame, net_or_sess)
 
     end = time.time()
     print("--> Total Prediction took " + str((end-start)*1000) + " ms")
@@ -304,6 +332,8 @@ if(run_mode == "ov") :
     net.setInput(np.zeros((1,3,300,300), dtype = "float32"))
     net.forward()
     net_or_graph = net
+
+    run_on_file(file_path, net, run_mode)
 else :
     if(run_mode == "tf"):
         import os
@@ -312,7 +342,19 @@ else :
 
     import tensorflow as tf
     from tensorflow.python.platform import gfile
-        
+
+
+    with tf.Session() as sess:
+        # load model from pb file  
+        with gfile.GFile(model_name+".pb",'rb') as f:
+            graph_def = tf.GraphDef()
+            graph_def.ParseFromString(f.read())
+            sess.graph.as_default()
+            g_in = tf.import_graph_def(graph_def, name="") #name = "" remove the import/ to the layers names
+
+            run_on_file(file_path, sess, run_mode)
+
+"""      
     detection_graph = tf.Graph()
     with detection_graph.as_default():
         od_graph_def = tf.GraphDef()
@@ -323,7 +365,7 @@ else :
     net_or_graph = detection_graph
 
 run_on_file(file_path, net_or_graph, run_mode)
-
+"""
 
 
 
