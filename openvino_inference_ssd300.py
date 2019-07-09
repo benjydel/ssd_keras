@@ -6,6 +6,8 @@ from datetime import datetime
 import random
 import argparse
 
+from openvino.inference_engine import IENetwork, IEPlugin
+
 #exemple:
 #python3 openvino_inference_ssd300.py --mode=tf_gpu --model_name=../ssd_keras_files/plate_inference_graph_retrained/frozen_inference_graph --classes="plates" --file=../ssd_keras_files/vehiculesutilitairesW.png --confidence=0.2
 #python3 openvino_inference_ssd300.py --mode=ov --model_name=/home/root/ssd_keras_files/frozen_inference_graph --classes="plates" --file="/home/root/ssd_keras_files/Test AR DOD RC500S A6.mp4" --confidence=0.2
@@ -232,10 +234,31 @@ def net_forward_cv2_openvino(frame, net):
 
     return y_pred_arrange
 
+def net_forward_openvino(frame, net):
+    #to set shape to [1, width, height, 3] instead of [width, height, 3]
+    #openVINO model does not contain reshape function because tensorflow uses while loop which OpenVINO does not support
+    start = time.time()
+    img_reshaped = np.expand_dims(np.moveaxis(cv2.resize(frame,(img_width,img_height)), -1, 0), axis=0) #set the shape from (3, 300, 300) to (1, 300, 300, 3)
+    #print(img_reshaped.shape)
+    end = time.time()
+    print("\t[INFO] Reshape took " + str((end-start)*1000) + " ms")
+    
+    start = time.time()
+    #pred : num_detections, detection_classes, detection_scores, detection_boxes (ymin, xmin, ymax, xmax)
+    y_preds = net.infer({list(net.requests[0].inputs.keys())[0]: img_reshaped})
+    #print(y_preds)
+    end = time.time()
+    print("\t[INFO] net infer took " + str((end-start)*1000) + " ms")
+    
+    y_pred_arrange = np.squeeze(list(y_preds.values())[0])[:,1:]
+
+    return y_pred_arrange
+
 def predict_on_image(frame, net_or_sess, run_mode):
     start = time.time()
     if(run_mode == "ov"):
-        y_pred = net_forward_cv2_openvino(frame, net_or_sess)
+        #y_pred = net_forward_cv2_openvino(frame, net_or_sess)
+        y_pred = net_forward_openvino(frame, net_or_sess)
     else:
         y_pred = run_inference_for_single_image(frame, net_or_sess)
 
@@ -324,6 +347,7 @@ def run_on_file(file_path, net_or_graph, run_mode) :
 print("First pass through the model to load it in RAM")
 ## IF OpenVino
 if(run_mode == "ov") :
+    """
     net = cv2.dnn.readNet( model_name+".bin",model_name+".xml")
     net.setPreferableBackend(cv2.dnn.DNN_BACKEND_INFERENCE_ENGINE) #
     net.setPreferableTarget(cv2.dnn.DNN_TARGET_MYRIAD)
@@ -331,7 +355,16 @@ if(run_mode == "ov") :
     #First pass of the network with an empty array to allocate all the memory space.
     net_forward_cv2_openvino(np.zeros((300, 300, 3), dtype = "float32"), net)
 
+    """
+    IEnet = IENetwork(model=model_name+".xml", weights=model_name+".bin")
+    plugin = IEPlugin(device="MYRIAD")
+    net = plugin.load(network=IEnet)
+
+    #First pass of the network with an empty array to allocate all the memory space.
+    net_forward_openvino(np.zeros((300, 300, 3), dtype = "float32"), net)
+    
     run_on_file(file_path, net, run_mode)
+
 else :
     if(run_mode == "tf"):
         import os
@@ -354,20 +387,3 @@ else :
             run_inference_for_single_image(np.zeros((300, 300, 3), dtype = "float32"), sess)
 
             run_on_file(file_path, sess, run_mode)
-
-"""      
-    detection_graph = tf.Graph()
-    with detection_graph.as_default():
-        od_graph_def = tf.GraphDef()
-        with tf.gfile.GFile(model_name+".pb", 'rb') as fid:
-            serialized_graph = fid.read()
-            od_graph_def.ParseFromString(serialized_graph)
-            tf.import_graph_def(od_graph_def, name='')
-    net_or_graph = detection_graph
-
-run_on_file(file_path, net_or_graph, run_mode)
-"""
-
-
-
-
