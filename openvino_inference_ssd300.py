@@ -12,7 +12,7 @@ from openvino.inference_engine import IENetwork, IEPlugin
 #python3 openvino_inference_ssd300.py --mode=tf_gpu --model_name=../ssd_keras_files/plate_inference_graph_retrained/frozen_inference_graph --classes="plates" --file=../ssd_keras_files/vehiculesutilitairesW.png --confidence=0.2
 #python3 openvino_inference_ssd300.py --mode=ov --model_name=/home/root/ssd_keras_files/frozen_inference_graph --classes="plates" --file="/home/root/ssd_keras_files/Test AR DOD RC500S A6.mp4" --confidence=0.2
 parser = argparse.ArgumentParser(description='Make inference on SSD 300 model TensorFlow or OpenVINO')
-parser.add_argument("--mode", help="tf for Tensorflow, tf_gpu for tensorflow with GPU, or ov for OpenVINO", required=False, default="tf", choices=('tf', 'tf_gpu', 'ov'))
+parser.add_argument("--mode", help="tf for Tensorflow, tf_gpu for tensorflow with GPU, or ov for OpenVINO", required=False, default="tf", choices=('tf', 'tf_gpu', 'ov', 'tflite'))
 parser.add_argument("--model_name", help="The path to the model (Do not write the extension .pb, .bin, .xml ...)", required=True)
 parser.add_argument("--classes", help="Names of object classes to be downloaded", required=True)
 parser.add_argument("--file", help="Path to the file (Image or Video)", required=True)
@@ -207,6 +207,52 @@ def run_inference_for_single_image(image, sess):
     #change the order for xmin, xmax, ymin, ymax
     return y_pred[...,[0,1,3,2,5,4]]
 
+def run_inference_for_single_image_tflite(image, interpreter):
+    start = time.time()
+    #to set shape to [1, width, height, 3] instead of [width, height, 3]
+    #tensorflow model already contain reshape function using while loop
+    img_reshaped = cv2.resize(image, (img_width, img_height)) #set to 300 * 300 img input
+    img_reshaped = np.expand_dims(img_reshaped, axis=0) # add one dim to the shape (300,300,3) to (1,300,300,3)
+    img_reshaped = (2.0 / 255.0) * img_reshaped - 1.0 
+    img_reshaped = img_reshaped.astype('float32')
+    end = time.time()
+    print("\t[INFO] Reshape took " + str((end-start)*1000) + " ms")
+
+    start = time.time()
+
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+
+    interpreter.set_tensor(input_details[0]['index'], img_reshaped)
+    end = time.time()
+    print("\t[INFO] set input" + str((end-start)*1000) + " ms")
+
+    start = time.time()
+    # Run inference
+    interpreter.invoke()
+    end = time.time()
+    print("\t[INFO] net forward took " + str((end-start)*1000) + " ms")
+
+    start = time.time()
+    # all outputs are float32 numpy arrays, so convert types as appropriate
+    num = int(interpreter.get_tensor(output_details[3]['index'])[0])
+    classes = interpreter.get_tensor(output_details[1]['index'])[0].astype(np.int64) + 1
+    boxes = interpreter.get_tensor(output_details[0]['index'])[0]
+    scores = interpreter.get_tensor(output_details[2]['index'])[0]
+
+    y_pred = np.column_stack( 
+            (np.column_stack(
+                (classes,
+                scores)
+            ),
+            boxes)
+        )
+    
+    end = time.time()
+    print("\t[INFO] compute numpy array took " + str((end-start)*1000) + " ms")
+    #change the order for xmin, xmax, ymin, ymax
+    return y_pred[...,[0,1,3,2,5,4]]
+
 def net_forward_cv2_openvino(frame, net):
     #to set shape to [1, width, height, 3] instead of [width, height, 3]
     #openVINO model does not contain reshape function because tensorflow uses while loop which OpenVINO does not support
@@ -259,6 +305,8 @@ def predict_on_image(frame, net_or_sess, run_mode):
     if(run_mode == "ov"):
         #y_pred = net_forward_cv2_openvino(frame, net_or_sess)
         y_pred = net_forward_openvino(frame, net_or_sess)
+    elif(run_mode == "tflite"):
+        y_pred = run_inference_for_single_image_tflite(frame, net_or_sess)
     else:
         y_pred = run_inference_for_single_image(frame, net_or_sess)
 
@@ -364,7 +412,18 @@ if(run_mode == "ov") :
     net_forward_openvino(np.zeros((300, 300, 3), dtype = "float32"), net)
     
     run_on_file(file_path, net, run_mode)
+elif(run_mode == "tflite") :
+    import tensorflow as tf
+    # Load TFLite model and allocate tensors.
+    interpreter = tf.lite.Interpreter(model_name+".tflite")
+    interpreter.allocate_tensors()
+    # Get input and output tensors.
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
 
+    run_inference_for_single_image_tflite(np.zeros((300, 300, 3), dtype = "float32"), interpreter)
+
+    run_on_file(file_path, interpreter, run_mode)
 else :
     if(run_mode == "tf"):
         import os
